@@ -141,6 +141,11 @@
                 
             </div>
 
+            <!-- Slut-tidspunkt (HH:MM) -->
+            <div class="mt-6 md:mt-8 text-xs md:text-sm text-slate-400 tracking-wide">
+                Slutter kl. <span id="endTimeDisplay" class="font-numeric text-white font-semibold">00:00</span>
+            </div>
+
             <!-- Tiden er udløbet skærm (Bliver synlig via JS) -->
             <div id="completedMessage" class="hidden mt-8 md:mt-12 text-center animate-bounce">
                 <span class="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-6 py-3 rounded-full font-bold tracking-wide text-sm md:text-base">
@@ -222,6 +227,14 @@
             document.getElementById('targetDateTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
         });
 
+        // Formatér et tidsstempel som HH:MM (uden sekunder)
+        function formatEndTime(timestamp) {
+            const d = new Date(timestamp);
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return `${hh}:${mm}`;
+        }
+
         // Start selve nedtællingen
         function startCountdown(event) {
             event.preventDefault();
@@ -258,6 +271,9 @@
             // Sæt titel
             const displayTitle = document.getElementById('displayTitle');
             displayTitle.textContent = titleInput ? titleInput : "Nedtælling i gang";
+
+            // Vis sluttidspunktet (HH:MM)
+            document.getElementById('endTimeDisplay').textContent = formatEndTime(targetTime);
 
             // Skift visning med en blød fade-transition
             const setupContainer = document.getElementById('setupContainer');
