@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="da" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minimalistisk Nedtælling</title>
+    <!-- Tailwind CSS til lynhurtig, moderne og responsiv styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for et premium, rent udtryk -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;700;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+        }
+        .font-numeric {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        /* Fjern standard-styling for native datetime-picker i mobil-browsere, så den matcher vores dark-mode */
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between overflow-hidden select-none">
+
+    <!-- Top Navigation / Kontrol-bar -->
+    <header class="p-4 md:p-6 flex justify-between items-center z-10 w-full max-w-7xl mx-auto">
+        <div class="flex items-center gap-2">
+            <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="text-xs md:text-sm font-semibold tracking-widest uppercase text-slate-400">Nedtælling</span>
+        </div>
+        
+        <!-- Fuldskærms-knap (Skjult indtil nedtællingen er i gang) -->
+        <button id="fullscreenBtn" onclick="toggleFullscreen()" class="hidden items-center gap-2 bg-slate-900/80 hover:bg-slate-800 border border-slate-800/80 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-all backdrop-blur-sm active:scale-95">
+            <!-- Fuldskærm-ikon -->
+            <svg id="enterFullscreenIcon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+            </svg>
+            <!-- Gå ud af fuldskærm-ikon -->
+            <svg id="exitFullscreenIcon" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
+            </svg>
+            <span id="fullscreenText" class="hidden sm:inline">Fuldskærm</span>
+        </button>
+    </header>
+
+    <!-- Hovedindhold -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8 z-10 w-full max-w-7xl mx-auto">
+        
+        <!-- TRIN 1: INDTASTNINGS-SKÆRM (Opsætning) -->
+        <div id="setupContainer" class="w-full max-w-md bg-slate-900/50 border border-slate-800/80 p-6 md:p-8 rounded-3xl backdrop-blur-md shadow-2xl transition-all duration-500 scale-100 opacity-100">
+            <h1 class="text-2xl md:text-3xl font-bold tracking-tight mb-2 text-white">Hvad tæller vi ned til?</h1>
+            <p class="text-sm text-slate-400 mb-6">Angiv dato og tidspunkt for at starte det fulde skærmur.</p>
+            
+            <form id="setupForm" onsubmit="startCountdown(event)" class="space-y-5">
+                <div>
+                    <label for="targetTitle" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Begivenhed (valgfri)</label>
+                    <input type="text" id="targetTitle" placeholder="F.eks. Nytårsaften, Deadline, Præsentation" 
+                           class="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 text-white placeholder-slate-600 outline-none transition-all text-sm">
+                </div>
+                
+                <div>
+                    <label for="targetDateTime" class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Dato & Tidspunkt</label>
+                    <input type="datetime-local" id="targetDateTime" required 
+                           class="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 text-white outline-none transition-all text-sm">
+                </div>
+                
+                <button type="submit" 
+                        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3.5 px-4 rounded-xl transition-all duration-200 active:scale-[0.98] shadow-lg shadow-indigo-600/20 text-sm md:text-base">
+                    Start nedtælling
+                </button>
+            </form>
+        </div>
+
+        <!-- TRIN 2: COUNTDOWN VISNING -->
+        <div id="countdownContainer" class="hidden w-full flex-col items-center justify-center text-center transition-all duration-500 scale-95 opacity-0">
+            
+            <!-- Dynamisk Begivenhedstitel -->
+            <h2 id="displayTitle" class="text-lg md:text-3xl font-medium tracking-wide text-slate-400 mb-6 md:mb-10 max-w-2xl truncate px-4"></h2>
+            
+            <!-- Countdown Grid -->
+            <div class="grid grid-cols-4 gap-2.5 sm:gap-4 md:gap-6 w-full max-w-5xl px-2">
+                
+                <!-- Dage -->
+                <div class="bg-slate-900/30 border border-slate-900/60 rounded-2xl md:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col justify-center items-center backdrop-blur-sm shadow-xl aspect-square md:aspect-auto">
+                    <span id="days" class="font-numeric text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.08)]">00</span>
+                    <span class="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-slate-400 mt-1 md:mt-3">Dage</span>
+                </div>
+                
+                <!-- Timer -->
+                <div class="bg-slate-900/30 border border-slate-900/60 rounded-2xl md:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col justify-center items-center backdrop-blur-sm shadow-xl aspect-square md:aspect-auto">
+                    <span id="hours" class="font-numeric text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.08)]">00</span>
+                    <span class="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-slate-400 mt-1 md:mt-3">Timer</span>
+                </div>
+                
+                <!-- Minutter -->
+                <div class="bg-slate-900/30 border border-slate-900/60 rounded-2xl md:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col justify-center items-center backdrop-blur-sm shadow-xl aspect-square md:aspect-auto">
+                    <span id="minutes" class="font-numeric text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.08)]">00</span>
+                    <span class="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-slate-400 mt-1 md:mt-3">Minutter</span>
+                </div>
+                
+                <!-- Sekunder (Fremhævet med en svag neon glød) -->
+                <div class="bg-indigo-950/10 border border-indigo-500/10 rounded-2xl md:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col justify-center items-center backdrop-blur-sm shadow-xl aspect-square md:aspect-auto">
+                    <span id="seconds" class="font-numeric text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold text-indigo-400 tracking-tight drop-shadow-[0_0_25px_rgba(129,140,248,0.25)]">00</span>
+                    <span class="text-[10px] sm:text-xs md:text-sm font-semibold tracking-widest uppercase text-indigo-300 mt-1 md:mt-3">Sekunder</span>
+                </div>
+                
+            </div>
+
+            <!-- Tiden er udløbet skærm (Bliver synlig via JS) -->
+            <div id="completedMessage" class="hidden mt-8 md:mt-12 text-center animate-bounce">
+                <span class="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-6 py-3 rounded-full font-bold tracking-wide text-sm md:text-base">
+                    🎉 Tiden er udløbet!
+                </span>
+            </div>
+
+            <!-- Rediger / Skift Tid Knap -->
+            <div class="mt-10 md:mt-14">
+                <button onclick="editSettings()" class="group flex items-center gap-2 text-xs md:text-sm text-slate-400 hover:text-white transition-all">
+                    <svg class="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                    </svg>
+                    Nulstil eller skift tidspunkt
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bund / Footer -->
+    <footer class="p-4 md:p-6 text-center z-10 w-full">
+        <p id="footerTip" class="text-[10px] md:text-xs text-slate-500 tracking-wider">Tryk på Fuldskærm for at skjule alle forstyrrelser.</p>
+    </footer>
+
+    <!-- JavaScript Logik -->
+    <script>
+        let countdownInterval;
+        let targetTime = null;
+
+        // Kør ved indlæsning for at sætte standardværdier
+        window.addEventListener('load', () => {
+            const now = new Date();
+            // Standard tidspunkt er sat til 1 time og 30 minutter frem i tiden
+            now.setMinutes(now.getMinutes() + 90);
+            
+            // Formatér tidspunktet så det passer ind i datovælgeren (YYYY-MM-DDTHH:MM)
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('targetDateTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        });
+
+        // Start selve nedtællingen
+        function startCountdown(event) {
+            event.preventDefault();
+
+            const titleInput = document.getElementById('targetTitle').value.trim();
+            const timeInput = document.getElementById('targetDateTime').value;
+
+            if (!timeInput) return;
+
+            targetTime = new Date(timeInput).getTime();
+            
+            // Tjek om datoen er i fortiden
+            if (targetTime <= new Date().getTime()) {
+                showToast("Vælg venligst et tidspunkt i fremtiden.");
+                return;
+            }
+
+            // Sæt titel
+            const displayTitle = document.getElementById('displayTitle');
+            displayTitle.textContent = titleInput ? titleInput : "Nedtælling i gang";
+
+            // Skift visning med en blød fade-transition
+            const setupContainer = document.getElementById('setupContainer');
+            const countdownContainer = document.getElementById('countdownContainer');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+            setupContainer.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                setupContainer.classList.add('hidden');
+                countdownContainer.classList.remove('hidden');
+                
+                // Trigger reflow for transition
+                countdownContainer.offsetHeight; 
+                countdownContainer.classList.remove('scale-95', 'opacity-0');
+                countdownContainer.classList.add('scale-100', 'opacity-100');
+                fullscreenBtn.classList.remove('hidden');
+                fullscreenBtn.classList.add('flex');
+            }, 500);
+
+            // Start timeren
+            updateTimer();
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(updateTimer, 1000);
+        }
+
+        // Timer opdaterings-funktion
+        function updateTimer() {
+            const now = new Date().getTime();
+            const difference = targetTime - now;
+
+            const daysEl = document.getElementById('days');
+            const hoursEl = document.getElementById('hours');
+            const minutesEl = document.getElementById('minutes');
+            const secondsEl = document.getElementById('seconds');
+            const completedMessage = document.getElementById('completedMessage');
+
+            if (difference <= 0) {
+                // Tiden er udløbet
+                clearInterval(countdownInterval);
+                daysEl.textContent = "00";
+                hoursEl.textContent = "00";
+                minutesEl.textContent = "00";
+                secondsEl.textContent = "00";
+                
+                completedMessage.classList.remove('hidden');
+                return;
+            }
+
+            // Beregn tidsenheder
+            const d = Math.floor(difference / (1000 * 60 * 60 * 24));
+            const h = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((difference % (1000 * 60)) / 1000);
+
+            // Sæt værdier med foranstillede nuller hvis nødvendigt
+            daysEl.textContent = String(d).padStart(2, '0');
+            hoursEl.textContent = String(h).padStart(2, '0');
+            minutesEl.textContent = String(m).padStart(2, '0');
+            secondsEl.textContent = String(s).padStart(2, '0');
+        }
+
+        // Gå tilbage og rediger opsætningen
+        function editSettings() {
+            clearInterval(countdownInterval);
+            
+            const setupContainer = document.getElementById('setupContainer');
+            const countdownContainer = document.getElementById('countdownContainer');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const completedMessage = document.getElementById('completedMessage');
+
+            countdownContainer.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                countdownContainer.classList.add('hidden');
+                completedMessage.classList.add('hidden');
+                setupContainer.classList.remove('hidden');
+                
+                setupContainer.offsetHeight; // Reflow
+                setupContainer.classList.remove('scale-95', 'opacity-0');
+                setupContainer.classList.add('scale-100', 'opacity-100');
+                
+                fullscreenBtn.classList.add('hidden');
+                fullscreenBtn.classList.remove('flex');
+
+                // Hvis vi var i fuldskærm, gå ud af det
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                }
+            }, 500);
+        }
+
+        // Fuldskærm funktionalitet (Universal understøttelse)
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.msFullscreenElement) {
+                
+                const element = document.documentElement;
+                if (element.requestFullscreen) {
+                    element.requestFullscreen();
+                } else if (element.msRequestFullscreen) {
+                    element.msRequestFullscreen();
+                } else if (element.mozRequestFullScreen) {
+                    element.mozRequestFullScreen();
+                } else if (element.webkitRequestFullscreen) {
+                    element.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        // Lyt efter ændringer i fuldskærms-status for at skifte ikoner og tekst
+        function handleFullscreenChange() {
+            const isFullscreen = document.fullscreenElement || 
+                                 document.mozFullScreenElement || 
+                                 document.webkitFullscreenElement || 
+                                 document.msFullscreenElement;
+
+            const enterIcon = document.getElementById('enterFullscreenIcon');
+            const exitIcon = document.getElementById('exitFullscreenIcon');
+            const text = document.getElementById('fullscreenText');
+            const footerTip = document.getElementById('footerTip');
+
+            if (isFullscreen) {
+                enterIcon.classList.add('hidden');
+                exitIcon.classList.remove('hidden');
+                text.textContent = "Normal skærm";
+                footerTip.classList.add('opacity-0'); // Skjul tip under fuldskærm
+            } else {
+                enterIcon.classList.remove('hidden');
+                exitIcon.classList.add('hidden');
+                text.textContent = "Fuldskærm";
+                footerTip.classList.remove('opacity-0');
+            }
+        }
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        // Custom Toast besked i stedet for browser standard 'alert'
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = "fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-950 border border-red-500/30 text-red-200 px-6 py-3 rounded-full text-sm font-semibold shadow-2xl z-50 transition-all duration-300 transform translate-y-4 opacity-0";
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Trigger animation
+            setTimeout(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            }, 10);
+
+            // Fjern efter 3 sekunder
+            setTimeout(() => {
+                toast.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
