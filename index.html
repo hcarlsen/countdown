@@ -175,7 +175,46 @@
     <script>
         let countdownInterval;
         let targetTime = null;
+        let currentTitle = '';
         let currentMode = 'datetime'; // 'datetime' eller 'duration'
+
+        // Nedtællingen gemmes i URL'ens hash, så den overlever både reload,
+        // dvale og en genstart af browseren (via gendannede faneblade).
+        // Hash frem for query-string, fordi replaceState med query-string
+        // kaster SecurityError når siden åbnes direkte fra file://.
+        // sessionStorage er kun en backup hvis hash'et skulle blive strippet;
+        // begge dele er per-faneblad, så to nedtællinger i to faner ikke kolliderer.
+        const STORAGE_KEY = 'countdown.state';
+
+        function saveState(state) {
+            const p = new URLSearchParams({ t: String(state.targetTime) });
+            if (state.title) p.set('n', state.title);
+            history.replaceState(null, '', `#${p}`);
+            try {
+                sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch { /* privat browsing e.l. — hash'et er stadig kilden */ }
+        }
+
+        function loadState() {
+            const p = new URLSearchParams(location.hash.slice(1));
+            const t = Number(p.get('t'));
+            if (Number.isFinite(t) && t > 0) {
+                return { targetTime: t, title: p.get('n') || '' };
+            }
+            try {
+                const raw = sessionStorage.getItem(STORAGE_KEY);
+                const st = raw && JSON.parse(raw);
+                if (st && Number.isFinite(st.targetTime) && st.targetTime > 0) return st;
+            } catch { /* ødelagt state → fald tilbage til opsætning */ }
+            return null;
+        }
+
+        function clearState() {
+            try {
+                sessionStorage.removeItem(STORAGE_KEY);
+            } catch { /* ignoreres */ }
+            history.replaceState(null, '', location.pathname + location.search);
+        }
 
         // Skift mellem "Dato & tid" og "Om X timer/minutter"
         function setMode(mode) {
@@ -211,20 +250,30 @@
             }
         }
 
-        // Kør ved indlæsning for at sætte standardværdier
-        window.addEventListener('load', () => {
+        // Sæt standardværdi i datovælgeren: 1 time og 30 minutter frem i tiden
+        function prefillDateTime() {
             const now = new Date();
-            // Standard tidspunkt er sat til 1 time og 30 minutter frem i tiden
             now.setMinutes(now.getMinutes() + 90);
-            
+
             // Formatér tidspunktet så det passer ind i datovælgeren (YYYY-MM-DDTHH:MM)
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
-            
+
             document.getElementById('targetDateTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        window.addEventListener('load', () => {
+            prefillDateTime();
+
+            const saved = loadState();
+            if (saved) {
+                // En udløbet nedtælling genoptages også — updateTimer viser
+                // "Tiden er udløbet" i stedet for at smide brugeren til opsætning.
+                activateCountdown(saved, false);
+            }
         });
 
         // Formatér et tidsstempel som HH:MM (uden sekunder)
@@ -260,38 +309,50 @@
                 computedTargetTime = new Date().getTime() + (hoursVal * 60 * 60 * 1000) + (minutesVal * 60 * 1000);
             }
 
-            targetTime = computedTargetTime;
-            
             // Tjek om datoen er i fortiden
-            if (targetTime <= new Date().getTime()) {
+            if (computedTargetTime <= new Date().getTime()) {
                 showToast("Vælg venligst et tidspunkt i fremtiden.");
                 return;
             }
 
-            // Sæt titel
-            const displayTitle = document.getElementById('displayTitle');
-            displayTitle.textContent = titleInput ? titleInput : "Nedtælling i gang";
+            const state = { targetTime: computedTargetTime, title: titleInput };
+            saveState(state);
+            activateCountdown(state, true);
+        }
 
-            // Vis sluttidspunktet (HH:MM)
+        // Vis nedtællings-skærmen og start timeren.
+        // animate=false bruges når en gemt nedtælling genoptages ved indlæsning,
+        // så vi springer opsætnings-skærmen og fade-overgangen helt over.
+        function activateCountdown(state, animate) {
+            targetTime = state.targetTime;
+            currentTitle = state.title || '';
+
+            document.getElementById('displayTitle').textContent =
+                currentTitle ? currentTitle : "Nedtælling i gang";
             document.getElementById('endTimeDisplay').textContent = formatEndTime(targetTime);
 
-            // Skift visning med en blød fade-transition
             const setupContainer = document.getElementById('setupContainer');
             const countdownContainer = document.getElementById('countdownContainer');
             const fullscreenBtn = document.getElementById('fullscreenBtn');
 
-            setupContainer.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
+            const show = () => {
                 setupContainer.classList.add('hidden');
                 countdownContainer.classList.remove('hidden');
-                
+
                 // Trigger reflow for transition
-                countdownContainer.offsetHeight; 
+                countdownContainer.offsetHeight;
                 countdownContainer.classList.remove('scale-95', 'opacity-0');
                 countdownContainer.classList.add('scale-100', 'opacity-100');
                 fullscreenBtn.classList.remove('hidden');
                 fullscreenBtn.classList.add('flex');
-            }, 500);
+            };
+
+            if (animate) {
+                setupContainer.classList.add('scale-95', 'opacity-0');
+                setTimeout(show, 500);
+            } else {
+                show();
+            }
 
             // Start timeren
             updateTimer();
@@ -319,6 +380,7 @@
                 secondsEl.textContent = "00";
                 
                 completedMessage.classList.remove('hidden');
+                document.title = currentTitle ? `⏰ ${currentTitle}` : "⏰ Tiden er udløbet";
                 return;
             }
 
@@ -333,12 +395,22 @@
             hoursEl.textContent = String(h).padStart(2, '0');
             minutesEl.textContent = String(m).padStart(2, '0');
             secondsEl.textContent = String(s).padStart(2, '0');
+
+            // Gør faneblade skelnelige fra fane-linjen, når flere nedtællinger kører
+            const remaining = d > 0
+                ? `${d}d ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+                : `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            document.title = currentTitle ? `${currentTitle} · ${remaining}` : remaining;
         }
 
         // Gå tilbage og rediger opsætningen
         function editSettings() {
             clearInterval(countdownInterval);
-            
+            clearState();
+            targetTime = null;
+            currentTitle = '';
+            document.title = "Minimalistisk Nedtælling";
+
             const setupContainer = document.getElementById('setupContainer');
             const countdownContainer = document.getElementById('countdownContainer');
             const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -348,6 +420,7 @@
             setTimeout(() => {
                 countdownContainer.classList.add('hidden');
                 completedMessage.classList.add('hidden');
+                prefillDateTime();
                 setupContainer.classList.remove('hidden');
                 
                 setupContainer.offsetHeight; // Reflow
